@@ -6,24 +6,27 @@
             [hiccup.core :as h]
             [next.jdbc :as jdbc]
             [next.jdbc.sql :as sql]
-            [mount.core :refer [defstate] :as mount]))
+            [mount.core :as mount]))
 
 (def db {:dbtype "sqlite" :dbname "/Users/malcolmstone/Documents/Projects/webing/webing.db"})
-(def ds (jdbc/get-datasource db))
-(def conn (jdbc/get-connection ds))
-(sql/query conn ["select * from posts;"])
-(sql/query conn ["select * from posts where id = ?", 0])
-(sql/insert! conn :posts {:slug "spring-tips" :title "Spring tips"})
+;; (def ds (jdbc/get-datasource db))
+;; (def conn (jdbc/get-connection ds))
+;; (sql/query conn ["select * from posts;"])
+;; (sql/query conn ["select * from posts where id = ?", 0])
+;; (sql/insert! conn :posts {:slug "spring-tips" :title "Spring tips"})
+
+(mount/defstate datasource
+  :start (jdbc/get-datasource db))
+
+(mount/defstate conn
+             :start (jdbc/get-connection datasource)
+             :stop (.close conn))
 
 ;; TODO
 ;; - add some kind of background job? why did i want to do this?
 ;; - set up with mount to manage the application state etc
 ;; - add layouts (again)
 ;; - add forms
-;; (defstate test
-;;   :start 1)
-;; (mount/start)
-;; (mount/stop)
 
 (defn posts-find
   []
@@ -77,9 +80,11 @@
 (def app
   (ring/ring-handler router))
 
-(def server
-  (jetty/run-jetty
-   (fn [req] (app req))
-   {:join? false :port 3000}))
+(mount/defstate server
+  :start (jetty/run-jetty
+          (fn [req] (app req))
+          {:join? false :port 3000})
+  :stop (.stop server))
 
-(.stop server)
+(mount/start)
+(mount/stop)
