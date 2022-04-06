@@ -5,7 +5,12 @@
             [clojure.pprint :as pprint]
             [hiccup.core :as h]
             [mount.core :refer [defstate] :as mount]))
-
+;; TODO
+;; - add sql and load posts from there
+;; - add some kind of background job? why did i want to do this?
+;; - set up with mount to manage the application state etc
+;; - add layouts (again)
+;; - add forms
 ;; (defstate test
 ;;   :start 1)
 ;; (mount/start)
