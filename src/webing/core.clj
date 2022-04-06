@@ -4,9 +4,18 @@
             [ring.adapter.jetty :as jetty]
             [clojure.pprint :as pprint]
             [hiccup.core :as h]
+            [next.jdbc :as jdbc]
+            [next.jdbc.sql :as sql]
             [mount.core :refer [defstate] :as mount]))
+
+(def db {:dbtype "sqlite" :dbname "/Users/malcolmstone/Documents/Projects/webing/webing.db"})
+(def ds (jdbc/get-datasource db))
+(def conn (jdbc/get-connection ds))
+(sql/query conn ["select * from posts;"])
+(sql/query conn ["select * from posts where id = ?", 0])
+(sql/insert! conn :posts {:slug "spring-tips" :title "Spring tips"})
+
 ;; TODO
-;; - add sql and load posts from there
 ;; - add some kind of background job? why did i want to do this?
 ;; - set up with mount to manage the application state etc
 ;; - add layouts (again)
@@ -16,15 +25,13 @@
 ;; (mount/start)
 ;; (mount/stop)
 
-(def posts
-  [{:id 1 :slug "test" :title "Test"}
-   {:id 2 :slug "spring-tips" :title "Spring tips"}
-   {:id 3 :slug "my-clojure-journey" :title "My Clojure journey"}])
+(defn posts-find
+  []
+  (sql/query conn ["select * from posts;"]))
 
-(defn find-by-slug
+(defn posts-find-by-slug
   [slug]
-  (->> posts (filter #(= slug (% :slug))) first))
-
+  (first (sql/query conn ["select * from posts where slug = ?;" slug])))
 
 (defn path-to
   ([router path-name]
@@ -35,15 +42,16 @@
        (r/match->path))))
 
 (defn posts-view
-  [router]
+  [router posts]
+  (prn posts)
   [:div
    [:h1 "Posts2"]
    [:ul
-    (for [{slug :slug title :title} posts]
+    (for [{slug :posts/slug title :posts/title} posts]
       [:li [:a {:href (path-to router ::posts-slug {:slug slug})} title]])]])
 
 (defn post-view
-  [router {title :title}]
+  [router {title :posts/title}]
   [:div
    [:h1 title]
    [:a {:href (path-to router ::posts)} "Back to posts"]])
@@ -57,13 +65,14 @@
     ["/posts"
      {:name ::posts
       :get (fn [{router :reitit.core/router}]
-             {:status 200 :body
-              (h/html (posts-view router))})}]
+             (let [posts (posts-find)]
+               {:status 200 :body
+                (h/html (posts-view router posts))}))}]
     ["/posts/:slug"
      {:name ::posts-slug
       :get (fn [{{slug :slug} :path-params
                  router :reitit.core/router}]
-             (let [post (find-by-slug slug)]
+             (let [post (posts-find-by-slug slug)]
                {:status 200 :body (h/html (post-view router post))}))}]]))
 (def app
   (ring/ring-handler router))
@@ -74,6 +83,3 @@
    {:join? false :port 3000}))
 
 (.stop server)
-(defn stop-server [server] (.stop server))
-
-(stop-server server)
