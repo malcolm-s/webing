@@ -4,4 +4,5 @@
   hiccup/hiccup {:mvn/version "2.0.0-alpha2"}
   com.github.seancorfield/next.jdbc {:mvn/version "1.2.780"}
   sqlitejdbc/sqlitejdbc {:mvn/version "0.5.6"}
-  mount/mount {:mvn/version "0.1.16"}}}
+  mount/mount {:mvn/version "0.1.16"}
+  org.clojure/core.async {:mvn/version "1.5.648"}}}

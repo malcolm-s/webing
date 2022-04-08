@@ -8,7 +8,8 @@
             [hiccup.core :as h]
             [next.jdbc :as jdbc]
             [next.jdbc.sql :as sql]
-            [mount.core :as mount]))
+            [mount.core :as mount]
+            [clojure.core.async :as async]))
 
 (def db
   {:dbtype "sqlite"
@@ -23,9 +24,7 @@
 
 ;; TODO
 ;; - add some kind of background job? why did i want to do this?
-;; - set up with mount to manage the application state etc
 ;; - add layouts (again)
-;; - add forms
 
 (defn posts-find
   []
