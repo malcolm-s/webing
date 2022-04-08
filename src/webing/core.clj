@@ -1,6 +1,8 @@
 (ns webing.core
   (:require [reitit.core :as r]
             [reitit.ring :as ring]
+            [ring.middleware.params :as ring-params]
+            [ring.middleware.keyword-params :as ring-keyword-params]
             [ring.adapter.jetty :as jetty]
             [clojure.pprint :as pprint]
             [hiccup.core :as h]
@@ -8,19 +10,16 @@
             [next.jdbc.sql :as sql]
             [mount.core :as mount]))
 
-(def db {:dbtype "sqlite" :dbname "/Users/malcolmstone/Documents/Projects/webing/webing.db"})
-;; (def ds (jdbc/get-datasource db))
-;; (def conn (jdbc/get-connection ds))
-;; (sql/query conn ["select * from posts;"])
-;; (sql/query conn ["select * from posts where id = ?", 0])
-;; (sql/insert! conn :posts {:slug "spring-tips" :title "Spring tips"})
+(def db
+  {:dbtype "sqlite"
+   :dbname "/Users/malcolmstone/Documents/Projects/webing/webing.db"})
 
 (mount/defstate datasource
   :start (jdbc/get-datasource db))
 
 (mount/defstate conn
-             :start (jdbc/get-connection datasource)
-             :stop (.close conn))
+  :start (jdbc/get-connection datasource)
+  :stop (.close conn))
 
 ;; TODO
 ;; - add some kind of background job? why did i want to do this?
@@ -36,6 +35,10 @@
   [slug]
   (first (sql/query conn ["select * from posts where slug = ?;" slug])))
 
+(defn posts-create
+  [post]
+  (sql/insert! conn :posts post))
+
 (defn path-to
   ([router path-name]
    (path-to router path-name {}))
@@ -46,9 +49,9 @@
 
 (defn posts-view
   [router posts]
-  (prn posts)
   [:div
    [:h1 "Posts2"]
+   [:a {:href (path-to router ::posts-new)} "New Post"]
    [:ul
     (for [{slug :posts/slug title :posts/title} posts]
       [:li [:a {:href (path-to router ::posts-slug {:slug slug})} title]])]])
@@ -59,11 +62,27 @@
    [:h1 title]
    [:a {:href (path-to router ::posts)} "Back to posts"]])
 
+(defn post-new
+  [router]
+  [:div
+   [:h1 "New post"]
+   [:form {:method "post" :action (path-to router ::posts-new)}
+    [:div
+     [:label {:for "title"} "Title"]
+     [:input#title {:type "text" :name "title"}]]
+    [:div
+     [:label {:for "slug"} "Slug"]
+     [:input#slug {:type "text" :name "slug"}]]
+    [:button {:type "submit"} "Save"]]])
+
+(defn see-other [path]
+  {:status 303
+   :headers {"Location" path}})
+
 (def router
   (ring/router
    [["/" {:name ::home
-          :get (fn [req] {:status 200 :body "Home"})}]
-    ["/test" {:get (fn [req] {:status 200 :body "Hello there"})}]
+          :get (fn [_] {:status 200 :body "Home"})}]
     ["/echo" {:get (fn [req] {:status 200 :body (with-out-str (pprint/pprint req))})}]
     ["/posts"
      {:name ::posts
@@ -71,14 +90,27 @@
              (let [posts (posts-find)]
                {:status 200 :body
                 (h/html (posts-view router posts))}))}]
+    ["/posts/new"
+     {:name ::posts-new
+      :get (fn [{router :reitit.core/router}]
+             {:status 200
+              :body (h/html (post-new router))})
+      :post (fn [{params :params
+                  router :reitit.core/router}]
+              (posts-create params)
+              (see-other (path-to router ::posts-slug {:slug (params :slug)})))}]
     ["/posts/:slug"
      {:name ::posts-slug
       :get (fn [{{slug :slug} :path-params
                  router :reitit.core/router}]
              (let [post (posts-find-by-slug slug)]
-               {:status 200 :body (h/html (post-view router post))}))}]]))
+               {:status 200 :body (h/html (post-view router post))}))}]]
+   {:conflicts nil}))
+
 (def app
-  (ring/ring-handler router))
+  (-> (ring/ring-handler router)
+      ring-keyword-params/wrap-keyword-params
+      (ring-params/wrap-params {:encoding "UTF-8"})))
 
 (mount/defstate server
   :start (jetty/run-jetty
