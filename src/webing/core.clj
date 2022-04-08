@@ -9,7 +9,8 @@
             [next.jdbc :as jdbc]
             [next.jdbc.sql :as sql]
             [mount.core :as mount]
-            [clojure.core.async :as async]))
+            [clojure.core.async :as async]
+            [taoensso.timbre :as t]))
 
 (def db
   {:dbtype "sqlite"
@@ -30,13 +31,22 @@
   []
   (sql/query conn ["select * from posts;"]))
 
+(defn posts-find-by-id
+  [id]
+  (first (sql/query conn ["select * from posts where id = ?;" id])))
+
 (defn posts-find-by-slug
   [slug]
   (first (sql/query conn ["select * from posts where slug = ?;" slug])))
 
+
+(def insert-id-key (keyword "last_insert_rowid()"))
+
 (defn posts-create
   [post]
-  (sql/insert! conn :posts post))
+  (t/infof "creating post %s" post)
+  (let [created-map (sql/insert! conn :posts post)]
+    (t/infof "created post id %s" (get created-map insert-id-key))))
 
 (defn path-to
   ([router path-name]
@@ -86,6 +96,7 @@
     ["/posts"
      {:name ::posts
       :get (fn [{router :reitit.core/router}]
+             (t/info "getting posts")
              (let [posts (posts-find)]
                {:status 200 :body
                 (h/html (posts-view router posts))}))}]
